@@ -4,6 +4,7 @@ open Xamarin.Forms
 open System
 open System.Diagnostics
 open System.Linq
+open System.Collections
 open System.Collections.ObjectModel
 open System.Windows.Input
 open System.ComponentModel
@@ -119,94 +120,97 @@ module ListViewSimpleSample =
                   { Name = "Tom"; Age = 13 }
                   { Name = "Sam"; Age = 5 } ]
 
-module BiggerSample =
+module ObservableCollectionSample =
+   
+   type MyPageViewModel() as self =
 
-    type ViewModel() =
+       let list =
+           new ObservableCollection<PersonViewModel>(
+               [ { Name = "Greg"; Age = 29 }
+                 { Name = "Tom"; Age = 13 }
+                 { Name = "Sam"; Age = 5 } ]
+               |> List.map(fun p -> new PersonViewModel(self, p.Name, p.Age)))
+
+       member self.List
+           with get() =
+               list
+
+       member self.Add
+           with get() =
+               new Command(fun () -> list.Add(new PersonViewModel(self, "New person", 0)))
+       
+    and PersonViewModel(parent: MyPageViewModel, name, age) =
         inherit ViewModelBase()
 
-        let mutable name = ""
-
-        let persons =
-            new ObservableCollection<Person>(
-                [ { Name = "Greg"; Age = 29 }
-                  { Name = "Tom"; Age = 13 }
-                  { Name = "Sam"; Age = 5 } ]
-            )
-
-        let add name =
-            persons.Add({ Name = name; Age = 10 })
-
-        member self.List 
-            with get() =
-                persons
+        let mutable name = name
+        let mutable age = age
 
         member self.Name
-            with get() = 
-                name
+            with get() = name
             and set value = 
-                base.OnPropertyChanging "Name"
                 name <- value
                 base.OnPropertyChanged "Name"
 
-        member self.AddCommand
-            with get() =
-                new Command<string>(fun name -> add name)
+        member self.Age
+            with get() = age
+            and set value = 
+                age <- value
+                base.OnPropertyChanged "Name"
 
-        member self.SetEntryCommand
+        member self.Remove
             with get() =
-                new Command<unit>(fun () -> self.Name <- "Hello word")
+                new Command<PersonViewModel>(fun p -> parent.List.Remove p |> ignore)
+        
+        new(parent:MyPageViewModel) = 
+            new PersonViewModel(parent, "", 0)
+                
 
-    type Cell() as self =
+    type MyTextCell() as self =
         inherit ViewCell()
 
         let name = new Label()
-        let age  = new Label()
-
+        let age = new Label()
+        let delete = new Button(Text = "Remove")
         let layout =
             let layout = new StackLayout(Orientation = StackOrientation.Horizontal)
             layout.Children.Add(name)
             layout.Children.Add(age)
+            layout.Children.Add(delete)
             layout
-        
+
         do
-            name.SetBinding(Label.TextProperty, "Name")
+            name.SetBinding(Label.TextProperty, "Name", stringFormat = "{0},")
             age.SetBinding(Label.TextProperty, "Age", stringFormat = "{0} years old")
+
+            delete.SetBinding(Button.CommandProperty, "Remove")
+            delete.SetBinding(Button.CommandParameterProperty, ".")
+
             self.View <- layout
 
-    type Root(viewModel: obj) as self =
-        inherit ContentPage(Title = "Databindings")
+    type MyPage(viewmodel: obj) as self =
+        inherit ContentPage(Title = "Observable collection sample")
 
-        let list  = new ListView(ItemTemplate = new DataTemplate(typeof<Cell>))
-        let btn   = new Button(Text = "Add")
-        let test  = new Button(Text = "Set entry to Hello world")
-        let entry = new Entry()
+        let listView = new ListView(ItemTemplate = new DataTemplate(typeof<MyTextCell>))
+        let btn      = new Button(Text = "Add new")
 
-        let layout = 
+        let layout =
             let layout = new StackLayout()
-            layout.Children.Add(list)
-            layout.Children.Add(entry)
+            layout.Children.Add(listView)
             layout.Children.Add(btn)
-            layout.Children.Add(test)
             layout
 
         do
-            list.SetBinding(ListView.ItemsSourceProperty, "List")
-            list.ItemTemplate.SetBinding(TextCell.TextProperty, "Name")
-            entry.SetBinding(Entry.TextProperty, "Name")
-            btn.SetBinding(Button.CommandProperty, "AddCommand")
-            btn.SetBinding(Button.CommandParameterProperty, "Name")
-            test.SetBinding(Button.CommandProperty, "SetEntryCommand")
-
-            self.SetBinding(ContentPage.TitleProperty, "Name")
-            base.Content <- layout
-            base.BindingContext <- viewModel
+            self.BindingContext <- viewmodel
+            listView.SetBinding(ListView.ItemsSourceProperty, "List")
+            btn.SetBinding(Button.CommandProperty, "Add")
+            self.Content <- layout
 
 type App() = 
     inherit Application()
 
     do 
-        //base.MainPage <- new MyPage(new MyPageViewModel())
-        //base.MainPage <- Root(new ViewModel())
-        //base.MainPage <- LabelEntrySample.MyPage(new LabelEntrySample.MyPageViewModel())
-        base.MainPage <- ListViewSimpleSample.MyPage(new ListViewSimpleSample.MyPageViewModel())
+        //base.MainPage <- new LabelSample.MyPage(new LabelSample.MyPageViewModel())
+        //base.MainPage <- new LabelEntrySample.MyPage(new LabelEntrySample.MyPageViewModel())
+        //base.MainPage <- new ListViewSimpleSample.MyPage(new ListViewSimpleSample.MyPageViewModel())
+        base.MainPage <- new ObservableCollectionSample.MyPage(new ObservableCollectionSample.MyPageViewModel())
 
