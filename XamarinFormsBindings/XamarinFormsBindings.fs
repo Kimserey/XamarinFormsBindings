@@ -8,11 +8,32 @@ open System.Collections.ObjectModel
 open System.Windows.Input
 open System.ComponentModel
 
+type Person = {
+    Name: string
+    Age: int
+}
+
+type ViewModelBase() =
+    let propertyChanging = new Event<PropertyChangingEventHandler, PropertyChangingEventArgs>()
+    let propertyChanged  = new Event<PropertyChangedEventHandler,  PropertyChangedEventArgs>()
+
+    interface INotifyPropertyChanged with
+        [<CLIEvent>]
+        member self.PropertyChanged = propertyChanged.Publish
+    
+    member self.PropertyChanging = propertyChanging.Publish
+
+    member self.OnPropertyChanging name =
+        propertyChanging.Trigger(self, new PropertyChangingEventArgs(name))
+
+    member self.OnPropertyChanged name =
+        propertyChanged.Trigger(self, new PropertyChangedEventArgs(name))
+
 
 module LabelSample =
     
     type MyPage(viewmodel: obj) as self =
-        inherit ContentPage(Title = "First sample")
+        inherit ContentPage(Title = "Label sample")
     
         let label =
             new Label()
@@ -28,7 +49,7 @@ module LabelSample =
 module LabelEntrySample =
 
     type MyPage(viewmodel: obj) as self =
-        inherit ContentPage(Title = "First sample")
+        inherit ContentPage(Title = "Label and entry sample")
 
         let label = new Label()
         let entry = new Entry()
@@ -45,37 +66,60 @@ module LabelEntrySample =
             self.Content <- layout
     
     type MyPageViewModel() =
+        inherit ViewModelBase()
 
         let mutable text = "Default text"
 
         member self.Text 
             with get() = text
             and set value = 
+                base.OnPropertyChanging "Text"
                 text <- value
                 Debug.WriteLine("Value set: {0}", value)
+                base.OnPropertyChanged "Text"
           
+module ListViewSimpleSample =
+
+    type MyTextCell() as self =
+        inherit ViewCell()
+
+        let name = new Label()
+        let age = new Label()
+        let layout =
+            let layout = new StackLayout(Orientation = StackOrientation.Horizontal)
+            layout.Children.Add(name)
+            layout.Children.Add(age)
+            layout
+
+        do
+            name.SetBinding(Label.TextProperty, "Name", stringFormat = "{0},")
+            age.SetBinding(Label.TextProperty, "Age", stringFormat = "{0} years old")
+            self.View <- layout
+
+    type MyPage(viewmodel: obj) as self =
+        inherit ContentPage(Title = "ListView sample")
+
+        //let listView = 
+        //    new ListView(ItemTemplate = new DataTemplate(typeof<TextCell>))
+
+        let listView = 
+            new ListView(ItemTemplate = new DataTemplate(fun () -> box <| new MyTextCell()))
+
+        do
+            self.BindingContext <- viewmodel
+            listView.SetBinding(ListView.ItemsSourceProperty, "List")
+            listView.ItemTemplate.SetBinding(TextCell.TextProperty, "Name")
+            self.Content <- listView
+    
+    type MyPageViewModel() =
+
+        member self.List 
+            with get() = 
+                [ { Name = "Greg"; Age = 29 }
+                  { Name = "Tom"; Age = 13 }
+                  { Name = "Sam"; Age = 5 } ]
+
 module BiggerSample =
-
-    type Person = {
-        Name: string
-        Age: int
-    }
-
-    type ViewModelBase() =
-        let propertyChanging = new Event<PropertyChangingEventHandler, PropertyChangingEventArgs>()
-        let propertyChanged  = new Event<PropertyChangedEventHandler,  PropertyChangedEventArgs>()
-
-        interface INotifyPropertyChanged with
-            [<CLIEvent>]
-            member self.PropertyChanged = propertyChanged.Publish
-        
-        member self.PropertyChanging = propertyChanging.Publish
-
-        member self.OnPropertyChanging name =
-            propertyChanging.Trigger(self, new PropertyChangingEventArgs(name))
-
-        member self.OnPropertyChanged name =
-            propertyChanged.Trigger(self, new PropertyChangedEventArgs(name))
 
     type ViewModel() =
         inherit ViewModelBase()
@@ -84,9 +128,9 @@ module BiggerSample =
 
         let persons =
             new ObservableCollection<Person>(
-                [ { Name = "Kim"; Age = 29 }
-                  { Name = "Tom"; Age = 29 }
-                  { Name = "Sam"; Age = 29 } ]
+                [ { Name = "Greg"; Age = 29 }
+                  { Name = "Tom"; Age = 13 }
+                  { Name = "Sam"; Age = 5 } ]
             )
 
         let add name =
@@ -163,5 +207,6 @@ type App() =
     do 
         //base.MainPage <- new MyPage(new MyPageViewModel())
         //base.MainPage <- Root(new ViewModel())
-        base.MainPage <- LabelEntrySample.MyPage(new LabelEntrySample.MyPageViewModel())
+        //base.MainPage <- LabelEntrySample.MyPage(new LabelEntrySample.MyPageViewModel())
+        base.MainPage <- ListViewSimpleSample.MyPage(new ListViewSimpleSample.MyPageViewModel())
 
